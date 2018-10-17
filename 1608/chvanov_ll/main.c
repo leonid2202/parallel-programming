@@ -4,7 +4,7 @@
 #include <limits.h>
 #include "mpi.h"
 
-#define ARRAY_LENGTH 20
+#define ARRAY_LENGTH 100
 
 int* generateRandomArray(int size)
 {
@@ -29,6 +29,7 @@ int findMaxInArray(int* arr, int size)
 int main(int argc, char* argv[]) {
 	int ProcNum, ProcRank;
 	int max = INT_MIN, i;
+	double startTime, endTime;
 	MPI_Status Status;
 
 	MPI_Init(&argc, &argv);
@@ -37,10 +38,11 @@ int main(int argc, char* argv[]) {
 	int step = ARRAY_LENGTH / ProcNum;			
 
 	if (ProcRank == 0) {
+		startTime = MPI_Wtime();
 		srand(time(NULL));
 		int* arr = generateRandomArray(ARRAY_LENGTH);
-		for (i = 0; i < ARRAY_LENGTH; i++)
-			printf("%6d", arr[i]);
+		/*for (i = 0; i < ARRAY_LENGTH; i++)
+			printf("%6d", arr[i]);*/
 
 		for (i = 1; i < ProcNum - 1; i++)
 			MPI_Send(arr + step * i, step, MPI_INT, i, 0, MPI_COMM_WORLD); 
@@ -56,9 +58,10 @@ int main(int argc, char* argv[]) {
 				max = recvMax;
 		}
 
+		endTime = MPI_Wtime();
 		free(arr);
 
-		printf("\nMax element - %d", max);
+		printf("\nMax element - %d\nTime spent - %.6f", max, endTime - startTime);
 	}
 	else
 	{
