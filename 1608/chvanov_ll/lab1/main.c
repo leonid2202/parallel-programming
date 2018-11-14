@@ -4,8 +4,6 @@
 #include <limits.h>
 #include "mpi.h"
 
-#define ARRAY_LENGTH 100
-
 int* generateRandomArray(int size)
 {
 	int *arr = NULL, i;
@@ -28,52 +26,50 @@ int findMaxInArray(int* arr, int size)
 
 int main(int argc, char* argv[]) {
 	int ProcNum, ProcRank;
-	int max = INT_MIN, i;
+	int max = INT_MIN, i, arrayLength;
+	int localMax;
 	double startTime, endTime;
 	MPI_Status Status;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &ProcNum);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
-	int step = ARRAY_LENGTH / ProcNum;			
+
+	if (ProcRank == 0)
+		arrayLength = atoi(argv[1]);
+	MPI_Bcast(&arrayLength, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+	int step = arrayLength / ProcNum;
 
 	if (ProcRank == 0) {
-		startTime = MPI_Wtime();
 		srand(time(NULL));
-		int* arr = generateRandomArray(ARRAY_LENGTH);
-		/*for (i = 0; i < ARRAY_LENGTH; i++)
-			printf("%6d", arr[i]);*/
-
+		int* arr = generateRandomArray(arrayLength);
+		//for (i = 0; i < arrayLength; i++)
+		//	printf("%6d", arr[i]);
+		startTime = MPI_Wtime();
 		for (i = 1; i < ProcNum - 1; i++)
-			MPI_Send(arr + step * i, step, MPI_INT, i, 0, MPI_COMM_WORLD); 
+			MPI_Send(arr + step * i, step, MPI_INT, i, 0, MPI_COMM_WORLD);
 		if (ProcNum > 1)
-			MPI_Send(arr + step * i, ARRAY_LENGTH - step * (ProcNum - 1), MPI_INT, i, 0, MPI_COMM_WORLD);
-
+			MPI_Send(arr + step * i, arrayLength - step * (ProcNum - 1), MPI_INT, i, 0, MPI_COMM_WORLD);
 		max = findMaxInArray(arr, step);
-
-		int recvMax;
-		for (i = 1; i < ProcNum; i++) {
-			MPI_Recv(&recvMax, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &Status);
-			if (recvMax > max)
-				max = recvMax;
-		}
-
-		endTime = MPI_Wtime();
 		free(arr);
-
-		printf("\nMax element - %d\nTime spent - %.6f", max, endTime - startTime);
 	}
 	else
 	{
-		int localSize = (ProcRank != (ProcNum - 1)) ? step : (ARRAY_LENGTH - step * (ProcNum - 1));
+		int localSize = (ProcRank != (ProcNum - 1)) ? step : (arrayLength - step * (ProcNum - 1));
 		int* recvBuf = malloc(localSize * sizeof(int));
 		MPI_Recv(recvBuf, localSize, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &Status);
-		int localMax = findMaxInArray(recvBuf, localSize);
+		localMax = findMaxInArray(recvBuf, localSize);
 		free(recvBuf);
-
-		MPI_Send(&localMax, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
 	}
+	if (ProcNum > 1)
+		MPI_Reduce(&localMax, &max, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
 
+	if (ProcRank == 0)
+	{
+		endTime = MPI_Wtime();
+		printf("\nMax element - %d\nTime spent - %.6f", max, endTime - startTime);
+	}
 	MPI_Finalize();
 	return 0;
 }
